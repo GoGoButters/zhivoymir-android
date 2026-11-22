@@ -31,13 +31,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,6 +45,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.movtery.zalithlauncher.game.account.AccountsManager
 import com.movtery.zalithlauncher.game.version.installed.Version
+import com.movtery.zalithlauncher.zhivoymir.login.ZhivoyMirAccount
+import com.movtery.zalithlauncher.zhivoymir.login.ZhivoyMirLogin
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val PREFS = "zhivoymir"
 private const val KEY_MIC_ASKED = "mic_permission_asked"
@@ -58,7 +62,43 @@ fun ZhivoyMirHomeHost(
     onLaunchGame: (Version) -> Unit,
     upstream: @Composable () -> Unit,
 ) {
+    val context = LocalContext.current
     var advanced by rememberSaveable { mutableStateOf(false) }
+    var editLogin by rememberSaveable { mutableStateOf(false) }
+    var loggedIn by remember { mutableStateOf(ZhivoyMirAccount.credentials(context).isComplete()) }
+    val loginRequested by ZhivoyMirAccount.loginRequested.collectAsState()
+
+    if (!loggedIn || editLogin || loginRequested) {
+        // заполненные поля для «Сменить»; пароль мог поменяться в игре (/nl change_password)
+        val initial by produceState<Pair<String, String>?>(null) {
+            value = withContext(Dispatchers.IO) {
+                val credentials = ZhivoyMirAccount.credentials(context)
+                credentials.pullFromGame(ZhivoyMir.versionDir())
+                val nick = credentials.nick.orEmpty()
+                nick to (credentials.password(nick).orEmpty())
+            }
+        }
+        initial?.let { (nick, password) ->
+            ZhivoyMirLogin(
+                initialNick = nick,
+                initialPassword = password,
+                onDone = {
+                    loggedIn = true
+                    editLogin = false
+                    advanced = false
+                    ZhivoyMirAccount.clearLoginRequest()
+                },
+                onCancel = if (loggedIn) {
+                    {
+                        editLogin = false
+                        ZhivoyMirAccount.clearLoginRequest()
+                    }
+                } else null,
+            )
+        }
+        return
+    }
+
     if (advanced) {
         Box(modifier = Modifier.fillMaxSize()) {
             upstream()
@@ -76,7 +116,11 @@ fun ZhivoyMirHomeHost(
             }
         }
     } else {
-        ZhivoyMirHome(onLaunchGame = onLaunchGame, onAdvanced = { advanced = true })
+        ZhivoyMirHome(
+            onLaunchGame = onLaunchGame,
+            onAdvanced = { advanced = true },
+            onChangeLogin = { editLogin = true },
+        )
     }
 }
 
@@ -84,12 +128,14 @@ fun ZhivoyMirHomeHost(
 fun ZhivoyMirHome(
     onLaunchGame: (Version) -> Unit,
     onAdvanced: () -> Unit,
+    onChangeLogin: () -> Unit,
     viewModel: ZhivoyMirViewModel = viewModel(LocalContext.current.findActivity()),
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     val packVersion by viewModel.packVersion.collectAsState()
     val account by AccountsManager.currentAccountFlow.collectAsState()
+    val nick = remember(account) { ZhivoyMirAccount.credentials(context).nick } ?: account?.username
 
     var pendingLaunch by remember { mutableStateOf<Version?>(null) }
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { _ ->
@@ -108,9 +154,10 @@ fun ZhivoyMirHome(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    ZhivoyMirBackground {
         Column(
             modifier = Modifier
+                .align(Alignment.Center)
                 .widthIn(max = 520.dp)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
@@ -118,45 +165,58 @@ fun ZhivoyMirHome(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = "Живой мир",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-            )
+            ZhivoyMirTitle()
+            ZhivoyMirNotice()
 
             val busy = state is PlayState.Working
-            Button(
+            McButton(
+                text = "Играть",
                 onClick = { viewModel.play(context, launch = launchWithMic) },
                 enabled = !busy,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(76.dp),
-                shape = MaterialTheme.shapes.extraLarge,
-            ) {
-                Text("Играть", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            }
+                fontSize = 24.sp,
+            )
+            McButton(
+                text = "Сменить ник / пароль",
+                onClick = onChangeLogin,
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth(),
+                fontSize = 11.sp,
+            )
 
             Text(
                 text = buildString {
                     append("Сборка ").append(packVersion ?: "—")
-                    append(" · Ник: ").append(account?.username ?: "не выбран")
+                    append(" · Ник: ").append(nick ?: "не выбран")
                 },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
+                style = ZhivoyMirStyle.pixel(10.sp),
             )
 
-            StateBlock(
-                state = state,
-                onRetry = { viewModel.play(context, launch = launchWithMic) },
-                onPlayOffline = { viewModel.play(context, skipUpdate = true, launch = launchWithMic) },
-                onCancel = { viewModel.cancel() },
-                onDismiss = { viewModel.dismiss() },
-            )
+            if (state != PlayState.Idle) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    tonalElevation = 6.dp,
+                ) {
+                    Box(modifier = Modifier.padding(12.dp)) {
+                        StateBlock(
+                            state = state,
+                            onRetry = { viewModel.play(context, launch = launchWithMic) },
+                            onPlayOffline = { viewModel.play(context, skipUpdate = true, launch = launchWithMic) },
+                            onCancel = { viewModel.cancel() },
+                            onDismiss = { viewModel.dismiss() },
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.size(8.dp))
-            TextButton(onClick = onAdvanced, enabled = !busy) {
-                Text("Дополнительно (версии, аккаунты, настройки)")
+            Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)) {
+                TextButton(onClick = onAdvanced, enabled = !busy) {
+                    Text("Дополнительно (версии, аккаунты, настройки)")
+                }
             }
         }
     }

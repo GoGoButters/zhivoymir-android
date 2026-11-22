@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.movtery.zalithlauncher.game.version.installed.Version
 import com.movtery.zalithlauncher.utils.logging.Logger
+import com.movtery.zalithlauncher.zhivoymir.login.ZhivoyMirAccount
 import com.movtery.zalithlauncher.zhivoymir.packwiz.HashMismatchException
 import com.movtery.zalithlauncher.zhivoymir.packwiz.PackFormatException
 import com.movtery.zalithlauncher.zhivoymir.packwiz.PackInfo
@@ -131,8 +132,18 @@ class ZhivoyMirViewModel : ViewModel() {
         ZhivoyMirGame.ensureControls(appContext)
         ZhivoyMirGame.applyPresets(appContext)
 
-        return withContext(Dispatchers.IO) { ZhivoyMirGame.loadVersion() }
+        val version = withContext(Dispatchers.IO) { ZhivoyMirGame.loadVersion() }
             ?: throw IllegalStateException("Версия ${ZhivoyMir.VERSION_NAME} повреждена — нажмите «Повторить»")
+
+        // пароль Nedologin выбранного ника — перед каждым запуском (мод читает его при старте игры)
+        val credentials = ZhivoyMirAccount.credentials(appContext)
+        if (!credentials.isComplete()) {
+            ZhivoyMirAccount.requestLogin()
+            throw IllegalStateException("Введите ник и пароль")
+        }
+        val nick = withContext(Dispatchers.IO) { credentials.pushToGame(version.getGameDir()) }
+        ZhivoyMirAccount.select(nick)
+        return version
     }
 
     private fun syncState(p: SyncProgress): PlayState.Working {

@@ -377,10 +377,10 @@ class MainActivity : BaseAppCompatActivity() {
                         submitError = {
                             errorViewModel.showError(it)
                         },
-                        toAccountManageScreen = { menu ->
-                            screenBackStackModel.mainScreen.navigateTo(
-                                screenKey = NormalNavKey.AccountManager(menu)
-                            )
+                        toAccountManageScreen = { _ ->
+                            // zhivoymir: no account -> own nick/password screen instead of ZL2 account manager
+                            screenBackStackModel.mainScreen.clearWith(NormalNavKey.LauncherMain)
+                            com.movtery.zalithlauncher.zhivoymir.login.ZhivoyMirAccount.requestLogin()
                         },
                         toVersionManageScreen = {
                             screenBackStackModel.mainScreen.removeAndNavigateTo(
