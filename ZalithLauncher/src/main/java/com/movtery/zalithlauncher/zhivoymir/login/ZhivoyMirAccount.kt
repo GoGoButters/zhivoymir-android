@@ -51,8 +51,14 @@ object ZhivoyMirAccount {
         when {
             existing == null -> {
                 Logger.info(TAG, "Creating local account $nick")
+                // постоянный id: если список аккаунтов ещё не загрузился, REPLACE не создаст дубль
                 AccountsManager.suspendSaveAccount(
-                    Account(username = nick, profileId = profileId, accountType = AccountType.LOCAL.tag)
+                    Account(
+                        uniqueUUID = "zhivoymir-$profileId",
+                        username = nick,
+                        profileId = profileId,
+                        accountType = AccountType.LOCAL.tag,
+                    )
                 )
             }
             existing.profileId != profileId -> {

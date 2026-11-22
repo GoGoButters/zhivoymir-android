@@ -89,6 +89,11 @@ class ZhivoyMirViewModel : ViewModel() {
 
     /** @return версия для запуска или null, если остановились на предупреждении */
     private suspend fun prepare(appContext: Context, skipUpdate: Boolean): Version? {
+        val credentials = ZhivoyMirAccount.credentials(appContext)
+        if (!credentials.isComplete()) {
+            ZhivoyMirAccount.requestLogin()
+            throw IllegalStateException("Введите ник и пароль")
+        }
         val syncer = syncer()
 
         if (!skipUpdate) {
@@ -136,11 +141,6 @@ class ZhivoyMirViewModel : ViewModel() {
             ?: throw IllegalStateException("Версия ${ZhivoyMir.VERSION_NAME} повреждена — нажмите «Повторить»")
 
         // пароль Nedologin выбранного ника — перед каждым запуском (мод читает его при старте игры)
-        val credentials = ZhivoyMirAccount.credentials(appContext)
-        if (!credentials.isComplete()) {
-            ZhivoyMirAccount.requestLogin()
-            throw IllegalStateException("Введите ник и пароль")
-        }
         val nick = withContext(Dispatchers.IO) { credentials.pushToGame(version.getGameDir()) }
         ZhivoyMirAccount.select(nick)
         return version
