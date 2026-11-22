@@ -120,6 +120,7 @@ import com.movtery.zalithlauncher.utils.festival.LocalFestivals
 import com.movtery.zalithlauncher.utils.file.formatFileSize
 import com.movtery.zalithlauncher.viewmodel.ErrorViewModel
 import com.movtery.zalithlauncher.viewmodel.EventViewModel
+import com.movtery.zalithlauncher.zhivoymir.ZhivoyMirHomeHost // zhivoymir
 import com.movtery.zalithlauncher.viewmodel.LocalBackgroundViewModel
 import com.movtery.zalithlauncher.viewmodel.ModifyVersionViewModel
 import com.movtery.zalithlauncher.viewmodel.ModpackImportViewModel
@@ -541,6 +542,12 @@ private fun NavigationUI(
             popTransitionSpec = rememberTransitionSpec(),
             entryProvider = entryProvider {
                 entry<NormalNavKey.LauncherMain> {
+                    // zhivoymir: own home with a big "Play" button, upstream screen under "Дополнительно"
+                    ZhivoyMirHomeHost(
+                        onLaunchGame = { version ->
+                            eventViewModel.sendEvent(EventViewModel.Event.Launch.Game(version))
+                        }
+                    ) {
                     LauncherScreen(
                         backStackViewModel = screenBackStackModel,
                         navigateToVersions = navigateToVersions,
@@ -567,6 +574,7 @@ private fun NavigationUI(
                             eventViewModel.sendStartGuideOnce(keys)
                         }
                     )
+                    } // zhivoymir
                 }
                 entry<NestedNavKey.Settings> { key ->
                     SettingsScreen(

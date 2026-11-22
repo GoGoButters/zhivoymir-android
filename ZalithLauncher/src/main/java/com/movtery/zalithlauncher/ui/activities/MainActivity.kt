@@ -225,7 +225,8 @@ class MainActivity : BaseAppCompatActivity() {
         NotificationManager.initManager(this)
 
         //检查更新
-        if (!isImporting && launcherUpgradeViewModel.operation == LauncherUpgradeOperation.None) {
+        // zhivoymir: upstream update check (Zalith-Info) disabled, own updater comes in stage D
+        if (false && !isImporting && launcherUpgradeViewModel.operation == LauncherUpgradeOperation.None) {
             lifecycleScope.launch {
                 launcherUpgradeViewModel.checkOnAppStart()
             }
@@ -599,6 +600,11 @@ class MainActivity : BaseAppCompatActivity() {
      * 检查启动器更新
      */
     private fun checkUpdate() {
+        // zhivoymir: upstream update check disabled, own updater comes in stage D
+        if (true) {
+            Toast.makeText(this, getString(R.string.upgrade_is_latest), Toast.LENGTH_SHORT).show()
+            return
+        }
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val success = launcherUpgradeViewModel.checkManually(

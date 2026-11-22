@@ -59,3 +59,5 @@
 
 # SoraEditor language-textmate
 -keep class org.jcodings.** { *; }
+# zhivoymir: packwiz manifest is (de)serialized with Gson
+-keep class com.movtery.zalithlauncher.zhivoymir.packwiz.** { *; }
