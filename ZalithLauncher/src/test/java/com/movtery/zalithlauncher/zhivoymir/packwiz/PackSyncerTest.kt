@@ -147,7 +147,8 @@ class PackSyncerTest {
             sync(game)
             fail("expected failure")
         } catch (e: PackSyncException) {
-            assertTrue("msg=${e.message} cause=${e.cause}", e.cause is HashMismatchException)
+            // coroutines stack trace recovery may wrap the original exception into a copy
+            assertTrue(e.toString(), generateSequence<Throwable>(e) { it.cause }.any { it is HashMismatchException })
         }
         assertFalse(File(game, "mods/mod.jar").exists())
         assertTrue(game.walk().none { it.name.endsWith(".part") })
