@@ -147,7 +147,7 @@ class PackSyncerTest {
             sync(game)
             fail("expected failure")
         } catch (e: PackSyncException) {
-            assertTrue(e.cause is HashMismatchException)
+            assertTrue("msg=${e.message} cause=${e.cause}", e.cause is HashMismatchException)
         }
         assertFalse(File(game, "mods/mod.jar").exists())
         assertTrue(game.walk().none { it.name.endsWith(".part") })
