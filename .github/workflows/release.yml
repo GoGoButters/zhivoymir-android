@@ -43,6 +43,7 @@ jobs:
             ver="$name"
           fi
           echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "Version: $ver (versionName $name)"
 
       - name: Set up JDK 21
@@ -124,11 +125,41 @@ jobs:
           cp "${apks[0]}" "dist/ZhivoyMir-${{ steps.ver.outputs.version }}.apk"
           ls -l dist
 
+      - name: Release notes
+        run: |
+          # тело релиза и notes в update.json: сообщение аннотированного тега (иначе — коммита)
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            git fetch --force --depth=1 origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+            git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(contents)' > "$RUNNER_TEMP/notes.txt"
+          else
+            git log -1 --format='%B' > "$RUNNER_TEMP/notes.txt"
+          fi
+          # подпись GPG из аннотированного тега не нужна
+          sed -i '/-----BEGIN PGP SIGNATURE-----/,$d' "$RUNNER_TEMP/notes.txt"
+          cat "$RUNNER_TEMP/notes.txt"
+
+      - name: Make update.json
+        run: |
+          apk="dist/ZhivoyMir-${{ steps.ver.outputs.version }}.apk"
+          aapt2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          code=$("$aapt2" dump badging "$apk" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)
+          name=$("$aapt2" dump badging "$apk" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)
+          echo "APK versionCode=$code versionName=$name"
+          test "$name" = "${{ steps.ver.outputs.name }}" || { echo "::error::APK versionName $name != ${{ steps.ver.outputs.name }}"; exit 1; }
+          url_args=()
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            url_args=(--url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/$(basename "$apk")")
+          fi
+          python3 .github/scripts/make-update-json.py --apk "$apk" --version-name "$name" --version-code "$code" \
+            --notes-file "$RUNNER_TEMP/notes.txt" "${url_args[@]}" --out dist/update.json
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: ZhivoyMir-${{ steps.ver.outputs.version }}
-          path: dist/*.apk
+          path: |
+            dist/*.apk
+            dist/update.json
 
       - name: Upload mapping
         uses: actions/upload-artifact@v7
@@ -136,14 +167,25 @@ jobs:
           name: mapping-${{ steps.ver.outputs.version }}
           path: ZalithLauncher/build/outputs/mapping/release/mapping.txt
 
+      - name: Release body
+        if: github.ref_type == 'tag'
+        run: |
+          {
+            cat "$RUNNER_TEMP/notes.txt"
+            echo
+            echo "---"
+            echo "Неофициальная модификация Zalith Launcher 2 (GPL-3.0) для сервера «Живой мир»."
+            echo "Сборка: arm64-v8a, основа — ZalithLauncher2 2.8.2."
+          } > "$RUNNER_TEMP/release-body.md"
+
       - name: GitHub Release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Живой мир ${{ steps.ver.outputs.version }}
-          body: |
-            Неофициальная модификация Zalith Launcher 2 (GPL-3.0) для сервера «Живой мир».
-            Сборка: arm64-v8a, основа — ZalithLauncher2 2.8.2.
-          files: dist/*.apk
+          body_path: ${{ runner.temp }}/release-body.md
+          files: |
+            dist/*.apk
+            dist/update.json
           fail_on_unmatched_files: true

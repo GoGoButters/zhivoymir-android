@@ -28,11 +28,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,10 +45,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.movtery.zalithlauncher.BuildConfig
 import com.movtery.zalithlauncher.game.account.AccountsManager
 import com.movtery.zalithlauncher.game.version.installed.Version
 import com.movtery.zalithlauncher.zhivoymir.login.ZhivoyMirAccount
 import com.movtery.zalithlauncher.zhivoymir.login.ZhivoyMirLogin
+import com.movtery.zalithlauncher.zhivoymir.update.AppUpdateDialog
+import com.movtery.zalithlauncher.zhivoymir.update.AppUpdater
+import com.movtery.zalithlauncher.zhivoymir.update.UpdateState
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -154,6 +161,35 @@ fun ZhivoyMirHome(
         }
     }
 
+    // обновление лаунчера: при старте и перед «Играть» (AppUpdater сам ограничивает частоту)
+    val scope = rememberCoroutineScope()
+    val updateState by AppUpdater.state.collectAsState()
+    var checkingUpdate by remember { mutableStateOf(false) }
+    var playAfterUpdateDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { AppUpdater.check(context) }
+    LaunchedEffect(updateState) {
+        if (updateState is UpdateState.Downloading) playAfterUpdateDialog = false
+    }
+    val play: () -> Unit = {
+        if (!checkingUpdate) {
+            checkingUpdate = true
+            scope.launch {
+                val shown = try {
+                    AppUpdater.check(context)
+                } finally {
+                    checkingUpdate = false
+                }
+                if (shown) playAfterUpdateDialog = true else viewModel.play(context, launch = launchWithMic)
+            }
+        }
+    }
+    AppUpdateDialog(onLater = {
+        if (playAfterUpdateDialog) {
+            playAfterUpdateDialog = false
+            viewModel.play(context, launch = launchWithMic)
+        }
+    })
+
     ZhivoyMirBackground {
         Column(
             modifier = Modifier
@@ -168,10 +204,10 @@ fun ZhivoyMirHome(
             ZhivoyMirTitle()
             ZhivoyMirNotice()
 
-            val busy = state is PlayState.Working
+            val busy = state is PlayState.Working || checkingUpdate
             McButton(
                 text = "Играть",
-                onClick = { viewModel.play(context, launch = launchWithMic) },
+                onClick = play,
                 enabled = !busy,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -193,6 +229,10 @@ fun ZhivoyMirHome(
                 },
                 style = ZhivoyMirStyle.pixel(10.sp),
             )
+            Text(
+                text = "Лаунчер ${BuildConfig.VERSION_NAME}",
+                style = ZhivoyMirStyle.pixel(7.sp, androidx.compose.ui.graphics.Color.White.copy(alpha = 0.6f)),
+            )
 
             if (state != PlayState.Idle) {
                 Surface(
@@ -203,7 +243,7 @@ fun ZhivoyMirHome(
                     Box(modifier = Modifier.padding(12.dp)) {
                         StateBlock(
                             state = state,
-                            onRetry = { viewModel.play(context, launch = launchWithMic) },
+                            onRetry = play,
                             onPlayOffline = { viewModel.play(context, skipUpdate = true, launch = launchWithMic) },
                             onCancel = { viewModel.cancel() },
                             onDismiss = { viewModel.dismiss() },

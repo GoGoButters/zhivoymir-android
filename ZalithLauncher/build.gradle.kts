@@ -23,8 +23,15 @@ val launcherName = project.findProperty("launcher_name") as? String ?: error("Th
 val launcherShortName = project.findProperty("launcher_short_name") as? String ?: error("The \"launcher_short_name\" property is not set in gradle.properties.")
 val launcherUrl = project.findProperty("url_home") as? String ?: error("The \"url_home\" property is not set in gradle.properties.")
 
-val launcherVersionCode = (project.findProperty("launcher_version_code") as? String)?.toIntOrNull() ?: error("The \"launcher_version_code\" property is not set as an integer in gradle.properties.")
 val launcherVersionName = project.findProperty("launcher_version_name") as? String ?: error("The \"launcher_version_name\" property is not set in gradle.properties.")
+// zhivoymir: versionCode = MAJOR*10000 + MINOR*100 + PATCH из launcher_version_name (растёт с каждым релизом);
+// та же формула — в AppUpdate.versionCodeOf и scripts/make-update-json.py
+val launcherVersionCode = Regex("""^(\d+)\.(\d+)\.(\d+)""").find(launcherVersionName)?.destructured
+    ?.let { (major, minor, patch) ->
+        if (minor.toInt() < 100 && patch.toInt() < 100) major.toInt() * 10000 + minor.toInt() * 100 + patch.toInt() else null
+    }
+    ?.takeIf { it > 1 }
+    ?: error("launcher_version_name \"$launcherVersionName\" must start with MAJOR.MINOR.PATCH (MINOR, PATCH < 100)")
 
 val defaultOAuthClientID = project.findProperty("oauth_client_id") as? String
 val defaultStorePassword = project.findProperty("default_store_password") as? String ?: error("The \"default_store_password\" property is not set in gradle.properties.")
