@@ -101,7 +101,7 @@ jobs:
       - name: Unit tests (packwiz sync)
         run: |
           chmod +x gradlew
-          ./gradlew ZalithLauncher:testReleaseUnitTest --tests 'com.movtery.zalithlauncher.zhivoymir.*' -Darch=arm64
+          ./gradlew ZalithLauncher:testDebugUnitTest --tests 'com.movtery.zalithlauncher.zhivoymir.*' -Darch=arm64
 
       - name: Upload test reports
         if: failure()

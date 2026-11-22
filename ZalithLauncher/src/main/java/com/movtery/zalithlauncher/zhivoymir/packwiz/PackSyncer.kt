@@ -23,7 +23,7 @@ import kotlinx.coroutines.currentCoroutineContext
 /** Сетевой доступ синхронизатора (в тестах — подмена без сети) */
 interface PackHttp {
     fun getBytes(url: String): ByteArray
-    fun download(url: String, out: OutputStream, onBytes: (Int) -> Unit)
+    fun download(url: String, out: OutputStream, onBytes: (Long) -> Unit)
 }
 
 data class SyncProgress(
@@ -106,13 +106,14 @@ class PackSyncer(
         val total = plan.download.size
         onProgress(SyncProgress(SyncProgress.Stage.DOWNLOAD, 0, total, 0))
         val failures = parallel(plan.download) { t ->
-            downloadTarget(t) { n -> bytes.addAndGet(n.toLong()) }
-            onProgress(SyncProgress(SyncProgress.Stage.DOWNLOAD, done.incrementAndGet(), total, bytes.get()))
+            downloadTarget(t) { n -> bytes.addAndGet(n) }
+            onProgress(SyncProgress(SyncProgress.Stage.DOWNLOAD, done.incrementAndGet(), total, bytes.get().coerceAtLeast(0)))
         }
 
         onProgress(SyncProgress(SyncProgress.Stage.CLEANUP, total, total, bytes.get()))
         var deleted = 0
-        for (path in plan.delete) {
+        // при неудачных загрузках старое не трогаем: лучше прежний мод, чем никакого
+        for (path in if (failures.isEmpty()) plan.delete else emptyList()) {
             val f = File(gameDir, PackPaths.normalize(path))
             if (f.isFile && f.delete()) deleted++
         }
@@ -126,7 +127,7 @@ class PackSyncer(
         SyncResult(plan.download.size, plan.keep.size, deleted, plan.preserved.size)
     }
 
-    private fun downloadTarget(t: TargetFile, onBytes: (Int) -> Unit) {
+    private fun downloadTarget(t: TargetFile, onBytes: (Long) -> Unit) {
         val target = File(gameDir, PackPaths.normalize(t.target!!))
         target.parentFile?.mkdirs()
         val part = File(target.parentFile, target.name + ".part")
@@ -159,7 +160,7 @@ class PackSyncer(
                     throw e
                 } catch (e: Exception) {
                     part.delete()
-                    onBytes(-counted.toInt())
+                    onBytes(-counted)
                     lastError = e
                     if (attempt < retries - 1) Thread.sleep(retryDelayMs * (attempt + 1))
                 }
@@ -219,7 +220,7 @@ class PackSyncer(
             // Gson не знает о null-безопасности Kotlin: битый файл может дать null в полях
             val m: LocalManifest? = gson.fromJson(file.readText(), LocalManifest::class.java)
             val files: Map<String, ManifestEntry?>? = m!!.files
-            m.copy(files = files.orEmpty().filterValues { it?.target != null }.mapValues { it.value!! })
+            m.copy(files = files.orEmpty().filterValues { it?.target != null && it.indexHash != null && it.hash != null && it.hashFormat != null }.mapValues { it.value!! })
         }.getOrDefault(LocalManifest())
 
         fun writeManifest(file: File, manifest: LocalManifest) {

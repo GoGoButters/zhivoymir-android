@@ -43,7 +43,7 @@ object OkHttpPackHttp : PackHttp {
             response.body.bytes()
         }
 
-    override fun download(url: String, out: OutputStream, onBytes: (Int) -> Unit) {
+    override fun download(url: String, out: OutputStream, onBytes: (Long) -> Unit) {
         DOWNLOAD_OKHTTP_CLIENT.newCall(request(url)).execute().use { response ->
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}: $url")
             response.body.byteStream().use { input ->
@@ -52,7 +52,7 @@ object OkHttpPackHttp : PackHttp {
                     val n = input.read(buf)
                     if (n < 0) break
                     out.write(buf, 0, n)
-                    onBytes(n)
+                    onBytes(n.toLong())
                 }
             }
         }

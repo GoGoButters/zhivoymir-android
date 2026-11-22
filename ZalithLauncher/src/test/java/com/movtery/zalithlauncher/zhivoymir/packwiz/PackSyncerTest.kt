@@ -27,10 +27,10 @@ private class FakeHttp : PackHttp {
         return files[url] ?: throw IOException("404 $url")
     }
 
-    override fun download(url: String, out: OutputStream, onBytes: (Int) -> Unit) {
+    override fun download(url: String, out: OutputStream, onBytes: (Long) -> Unit) {
         val data = getBytes(url)
         out.write(data)
-        onBytes(data.size)
+        onBytes(data.size.toLong())
     }
 }
 
