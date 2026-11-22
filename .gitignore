@@ -32,3 +32,7 @@ LWJGL/*/build/
 
 .vscode/
 
+
+# ZhivoyMir signing keys (never commit)
+/ZalithLauncher/zhivoymir.jks
+*.keystore

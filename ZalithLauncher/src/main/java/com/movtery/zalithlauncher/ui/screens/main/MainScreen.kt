@@ -68,6 +68,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.constraintlayout.compose.ConstraintLayout
@@ -212,6 +213,18 @@ fun MainScreen(
                 changeExpandedState = {
                     changeTasksExpandedState()
                 },
+            )
+
+            // ZhivoyMir: notice required by ZL2 license additional terms (GPLv3 section 7)
+            Text(
+                text = stringResource(R.string.zhivoymir_unofficial_notice),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+                maxLines = 1
             )
 
             Box(

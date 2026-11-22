@@ -16,7 +16,9 @@ plugins {
 }
 
 val zalithPackageName = "com.movtery.zalithlauncher"
+val zhivoyMirApplicationId = "ru.zhivoymir.launcher"
 val launcherAPPName = project.findProperty("launcher_app_name") as? String ?: error("The \"launcher_app_name\" property is not set in gradle.properties.")
+val launcherLabel = project.findProperty("launcher_label") as? String ?: error("The \"launcher_label\" property is not set in gradle.properties.")
 val launcherName = project.findProperty("launcher_name") as? String ?: error("The \"launcher_name\" property is not set in gradle.properties.")
 val launcherShortName = project.findProperty("launcher_short_name") as? String ?: error("The \"launcher_short_name\" property is not set in gradle.properties.")
 val launcherUrl = project.findProperty("url_home") as? String ?: error("The \"url_home\" property is not set in gradle.properties.")
@@ -115,9 +117,10 @@ android {
 
     signingConfigs {
         create("releaseBuild") {
-            storeFile = file("zalith_launcher.jks")
-            storePassword = getKeyFromLocal("STORE_PASSWORD", ".store_password.txt")
-            keyAlias = "movtery_zalith"
+            // ZhivoyMir: release key comes from CI secrets (see .github/workflows/release.yml)
+            storeFile = file(getKeyFromLocal("KEYSTORE_FILE", default = "zhivoymir.jks"))
+            storePassword = getKeyFromLocal("KEYSTORE_PASSWORD", ".store_password.txt")
+            keyAlias = getKeyFromLocal("KEY_ALIAS", default = "zhivoymir")
             keyPassword = getKeyFromLocal("KEY_PASSWORD", ".key_password.txt")
         }
         create("debugBuild") {
@@ -129,13 +132,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = zalithPackageName
-        applicationIdSuffix = ".v2"
+        applicationId = zhivoyMirApplicationId
         minSdk = 26
         targetSdk = 34
         versionCode = launcherVersionCode
         versionName = launcherVersionName
-        manifestPlaceholders["launcher_name"] = launcherAPPName
+        manifestPlaceholders["launcher_name"] = launcherLabel
     }
 
     buildTypes {

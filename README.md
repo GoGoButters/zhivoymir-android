@@ -1,3 +1,28 @@
+# Живой мир — Android-лаунчер (неофициальная модификация Zalith Launcher 2)
+
+**Живой мир** — Android-лаунчер Minecraft: Java Edition для сервера «Живой мир».
+Это **неофициальная модификация** [Zalith Launcher 2](https://github.com/ZalithLauncher/ZalithLauncher2)
+(основа — тег `2.8.2`), не связанная с авторами оригинала и не поддерживаемая ими.
+
+Лицензия: **[GPL-3.0](LICENSE)** с дополнительными условиями оригинала (см. ниже, раздел «附加条款 / Additional Terms»).
+Все копирайты оригинального проекта сохранены.
+
+## Что изменено относительно Zalith Launcher 2
+- Имя приложения «Живой мир», applicationId `ru.zhivoymir.launcher`, версия `0.1.0-zl2.8.2` (пакеты исходников не переименованы).
+- Своя иконка (adaptive icon), на главном экране надпись «Неофициальная модификация Zalith Launcher 2».
+- Из сборки убраны «Пользовательское соглашение» и «Политика конфиденциальности» Zalith Launcher 2 (экран согласия не показывается).
+- Сборка и подпись собственным ключом в GitHub Actions (`.github/workflows/release.yml`), только `arm64-v8a`; workflow оригинала удалены.
+- Ключи CurseForge API и Microsoft OAuth оригинала в сборку не входят (см. ниже).
+
+## Сборка
+Push тега `v*` (или ручной запуск workflow) → подписанный release-APK → GitHub Release `ZhivoyMir-<версия>.apk`.
+Нужные секреты репозитория: `KEYSTORE_B64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`.
+Необязательные: `CURSEFORGE_API_KEY`, `OAUTH_CLIENT_ID` (без них поиск на CurseForge через официальный API и вход через Microsoft не работают).
+
+Оригинальный README Zalith Launcher 2 приведён ниже без изменений.
+
+---
+
 # Zalith Launcher 2
 ![Downloads](https://img.shields.io/github/downloads/ZalithLauncher/ZalithLauncher2/total)
 [![Sponsor](https://img.shields.io/badge/sponsor-30363D?logo=GitHub-Sponsors)](https://afdian.com/a/MovTery)

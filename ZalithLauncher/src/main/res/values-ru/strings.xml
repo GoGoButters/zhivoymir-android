@@ -1243,4 +1243,5 @@
     <string name="guide_joystick_events_lock_text4">Нажмите на кнопку, чтобы отредактировать события срабатывания</string>
     <string name="guide_joystick_events_events_text1">Задействуемые события такие же, как у обычных кнопок, — свободы очень много</string>
     <string name="guide_joystick_events_events_text2">Если нужно только управлять игрой, просто отредактируйте привязки клавиш в разделе «Клавиша»</string>
+    <string name="zhivoymir_unofficial_notice">Неофициальная модификация Zalith Launcher 2</string>
 </resources>
