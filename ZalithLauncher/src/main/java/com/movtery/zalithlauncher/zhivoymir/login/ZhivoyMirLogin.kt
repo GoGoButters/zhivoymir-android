@@ -1,5 +1,7 @@
 package com.movtery.zalithlauncher.zhivoymir.login
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -27,7 +29,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -49,14 +50,14 @@ import com.movtery.zalithlauncher.zhivoymir.ZhivoyMirTitle
 import kotlinx.coroutines.launch
 
 /**
- * Экран входа: ник + пароль Nedologin.
- * @param initialNick/initialPassword заполненные поля для «Сменить ник / пароль»
+ * Экран входа: только ник, пароль Nedologin создаётся сам ([Credentials.loginAuto]).
+ * «Дополнительно»: ручной ввод пароля (восстановление / перенос) и показ пароля этого устройства.
+ * @param initialNick заполненное поле для «Сменить ник»
  * @param onCancel null — первый запуск, отменить нельзя
  */
 @Composable
 fun ZhivoyMirLogin(
     initialNick: String,
-    initialPassword: String,
     onDone: () -> Unit,
     onCancel: (() -> Unit)?,
 ) {
@@ -65,10 +66,11 @@ fun ZhivoyMirLogin(
     val scope = rememberCoroutineScope()
 
     var nick by rememberSaveable { mutableStateOf(initialNick) }
-    var password by rememberSaveable { mutableStateOf(initialPassword) }
+    var advanced by rememberSaveable { mutableStateOf(false) }
+    var password by rememberSaveable { mutableStateOf("") }
     var showPassword by rememberSaveable { mutableStateOf(false) }
+    var devicePassword by rememberSaveable { mutableStateOf<String?>(null) }
     var nickError by rememberSaveable { mutableStateOf<String?>(null) }
-    var passwordError by rememberSaveable { mutableStateOf<String?>(null) }
     var busy by rememberSaveable { mutableStateOf(false) }
 
     onCancel?.let { BackHandler(onBack = it) }
@@ -76,17 +78,19 @@ fun ZhivoyMirLogin(
     val submit: () -> Unit = submit@{
         if (busy) return@submit
         val cleanNick = Nick.clean(nick)
-        val cleanPassword = Password.clean(password)
+        // пустое поле «Дополнительно» — пароль устройства
+        val manualPassword = Password.clean(password).takeIf { advanced && it.isNotEmpty() }
         nick = cleanNick
-        password = cleanPassword
+        password = manualPassword.orEmpty()
         nickError = Nick.error(cleanNick)
-        passwordError = Password.error(cleanPassword)
-        if (nickError != null || passwordError != null) return@submit
+        if (nickError != null) return@submit
         focus.clearFocus()
         busy = true
         scope.launch {
             try {
-                ZhivoyMirAccount.credentials(context).login(cleanNick, cleanPassword)
+                val credentials = ZhivoyMirAccount.credentials(context)
+                if (manualPassword != null) credentials.login(cleanNick, manualPassword)
+                else credentials.loginAuto(cleanNick)
                 ZhivoyMirAccount.select(cleanNick)
                 onDone()
             } catch (e: Exception) {
@@ -95,6 +99,20 @@ fun ZhivoyMirLogin(
             } finally {
                 busy = false
             }
+        }
+    }
+
+    val showDevicePassword: () -> Unit = show@{
+        val cleanNick = Nick.clean(nick)
+        nickError = Nick.error(cleanNick)
+        if (nickError != null) return@show
+        val saved = ZhivoyMirAccount.credentials(context).password(cleanNick)?.takeIf { it.isNotEmpty() }
+        devicePassword = if (saved == null) {
+            "Для ника $cleanNick пароль ещё не создан — он появится после «Войти»"
+        } else {
+            context.getSystemService(ClipboardManager::class.java)
+                ?.setPrimaryClip(ClipData.newPlainText("password", saved))
+            "Пароль $cleanNick (скопирован): $saved"
         }
     }
 
@@ -135,35 +153,15 @@ fun ZhivoyMirLogin(
                             capitalization = KeyboardCapitalization.None,
                             autoCorrectEnabled = false,
                             keyboardType = KeyboardType.Ascii,
-                            imeAction = ImeAction.Next,
-                        ),
-                        keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
-                    )
-                    Hint(nickError ?: "3–16 символов: латинские буквы, цифры, _", nickError != null)
-
-                    McTextField(
-                        value = password,
-                        onValueChange = { password = it; passwordError = null },
-                        label = "Пароль",
-                        error = passwordError,
-                        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(
-                            autoCorrectEnabled = false,
-                            keyboardType = KeyboardType.Password,
                             imeAction = ImeAction.Done,
                         ),
                         keyboardActions = KeyboardActions(onDone = { submit() }),
-                        trailing = {
-                            TextButton(onClick = { showPassword = !showPassword }) {
-                                Text(if (showPassword) "скрыть" else "показать", color = ZhivoyMirStyle.TextLight)
-                            }
-                        },
                     )
+                    Hint(nickError ?: "3–16 символов: латинские буквы, цифры, _", nickError != null)
                     Hint(
-                        passwordError
-                            ?: "Новый игрок — придумайте пароль, он закрепит ник на сервере. " +
-                            "Уже играете на ПК — введите пароль с ПК (файл .nl_password в папке игры на ПК).",
-                        passwordError != null,
+                        "Пароль создаётся автоматически и закрепляет ник за этим устройством; " +
+                            "если вы уже играете на ПК — ничего вводить не нужно",
+                        false,
                     )
 
                     McButton(
@@ -177,6 +175,45 @@ fun ZhivoyMirLogin(
                     )
                     onCancel?.let {
                         McButton(text = "Отмена", onClick = it, modifier = Modifier.fillMaxWidth(), fontSize = 12.sp)
+                    }
+
+                    TextButton(onClick = { advanced = !advanced }) {
+                        Text(
+                            if (advanced) "Дополнительно ▲" else "Дополнительно ▼",
+                            color = ZhivoyMirStyle.TextLight,
+                        )
+                    }
+                    if (advanced) {
+                        McTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            label = "Пароль вручную",
+                            error = null,
+                            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(
+                                autoCorrectEnabled = false,
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done,
+                            ),
+                            keyboardActions = KeyboardActions(onDone = { submit() }),
+                            trailing = {
+                                TextButton(onClick = { showPassword = !showPassword }) {
+                                    Text(if (showPassword) "скрыть" else "показать", color = ZhivoyMirStyle.TextLight)
+                                }
+                            },
+                        )
+                        Hint(
+                            "Восстановление или перенос на новое устройство: введите пароль со старого планшета " +
+                                "(или с ПК) и нажмите «Войти». Пусто — пароль этого устройства.",
+                            false,
+                        )
+                        McButton(
+                            text = "Показать / скопировать пароль этого устройства",
+                            onClick = showDevicePassword,
+                            modifier = Modifier.fillMaxWidth(),
+                            fontSize = 11.sp,
+                        )
+                        devicePassword?.let { Hint(it, false) }
                     }
                 }
             }

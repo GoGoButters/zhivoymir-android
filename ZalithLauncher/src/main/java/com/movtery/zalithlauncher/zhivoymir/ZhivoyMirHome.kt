@@ -76,19 +76,17 @@ fun ZhivoyMirHomeHost(
     val loginRequested by ZhivoyMirAccount.loginRequested.collectAsState()
 
     if (!loggedIn || editLogin || loginRequested) {
-        // заполненные поля для «Сменить»; пароль мог поменяться в игре (/nl change_password)
-        val initial by produceState<Pair<String, String>?>(null) {
+        // ник для «Сменить»; пароль мог поменяться в игре (/nl change_password) — забрать до показа пароля
+        val initial by produceState<String?>(null) {
             value = withContext(Dispatchers.IO) {
                 val credentials = ZhivoyMirAccount.credentials(context)
                 credentials.pullFromGame(ZhivoyMir.versionDir())
-                val nick = credentials.nick.orEmpty()
-                nick to (credentials.password(nick).orEmpty())
+                credentials.nick.orEmpty()
             }
         }
-        initial?.let { (nick, password) ->
+        initial?.let { nick ->
             ZhivoyMirLogin(
                 initialNick = nick,
-                initialPassword = password,
                 onDone = {
                     loggedIn = true
                     editLogin = false
@@ -215,7 +213,7 @@ fun ZhivoyMirHome(
                 fontSize = 24.sp,
             )
             McButton(
-                text = "Сменить ник / пароль",
+                text = "Сменить ник",
                 onClick = onChangeLogin,
                 enabled = !busy,
                 modifier = Modifier.fillMaxWidth(),

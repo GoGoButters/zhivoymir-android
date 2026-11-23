@@ -10,6 +10,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.util.Random
 
 class CredentialsTest {
     @get:Rule
@@ -142,5 +143,77 @@ class CredentialsTest {
         File(dir, ".nl_password").delete()
         assertFalse(creds.pullFromGame(dir))
         assertEquals("pw", creds.password("vadim"))
+    }
+
+    @Test
+    fun generatedPasswordFormat() {
+        val passwords = (1..50).map { DevicePassword.generate() }
+        for (pw in passwords) {
+            assertTrue(pw.startsWith("zm-android:"))
+            assertEquals("zm-android:".length + 32, pw.length)
+            assertTrue(Regex("zm-android:[A-Za-z0-9]{32}").matches(pw))
+            assertTrue(DevicePassword.isDevice(pw))
+        }
+        assertEquals(passwords.size, passwords.toSet().size)
+        // алфавит используется целиком (62 символа), а не урезанная часть
+        val used = passwords.joinToString("") { it.removePrefix(DevicePassword.PREFIX) }.toSet()
+        assertTrue(used.size > 50)
+        assertFalse(DevicePassword.isDevice("1f0e3dad-99a8-4b1c-a2a4-2a4b1c0e3dad"))
+    }
+
+    @Test
+    fun autoLoginGeneratesAndReusesPerNick() {
+        val creds = Credentials(MapStore())
+        val dir = tmp.newFolder()
+        val alice = creds.loginAuto("alice", Random(1))
+        assertTrue(DevicePassword.isDevice(alice))
+        assertTrue(creds.isComplete())
+        assertEquals(alice, creds.loginAuto("alice", Random(2)))
+        val bob = creds.loginAuto("bob", Random(3))
+        assertTrue(bob != alice)
+        assertEquals("bob", creds.nick)
+        assertEquals(alice, creds.loginAuto("alice", Random(4)))
+        assertEquals("alice", creds.pushToGame(dir))
+        assertEquals(alice, NlPasswordFile.read(dir))
+        assertEquals(bob, creds.password("bob"))
+    }
+
+    @Test
+    fun migrationKeepsPcPasswordFrom020() {
+        // 0.2.0: игрок ввёл пароль с ПК (без префикса) — он остаётся основным, не подменяется
+        val store = MapStore()
+        Credentials(store).login("vadim", "pc-uuid-password")
+        val creds = Credentials(store)
+        assertTrue(creds.isComplete())
+        assertEquals("pc-uuid-password", creds.loginAuto("vadim", Random(5)))
+        assertEquals("pc-uuid-password", creds.password("vadim"))
+        val dir = tmp.newFolder()
+        creds.pushToGame(dir)
+        assertEquals("pc-uuid-password", NlPasswordFile.read(dir))
+    }
+
+    @Test
+    fun gameChangeOfDevicePasswordIsReused() {
+        val creds = Credentials(MapStore())
+        val dir = tmp.newFolder()
+        creds.loginAuto("vadim")
+        creds.pushToGame(dir)
+        File(dir, ".nl_password").writeText("changedInGame", Charsets.UTF_8)
+        assertTrue(creds.pullFromGame(dir))
+        assertEquals("changedInGame", creds.loginAuto("vadim"))
+    }
+
+    @Test
+    fun manualPasswordReplacesDevicePassword() {
+        val creds = Credentials(MapStore())
+        val dir = tmp.newFolder()
+        creds.loginAuto("vadim")
+        // перенос на новый планшет: пароль со старого устройства
+        val old = "zm-android:" + "a".repeat(32)
+        creds.login("vadim", Password.clean(" $old\n"))
+        assertEquals(old, creds.password("vadim"))
+        assertEquals(old, creds.loginAuto("vadim"))
+        creds.pushToGame(dir)
+        assertEquals(old, NlPasswordFile.read(dir))
     }
 }

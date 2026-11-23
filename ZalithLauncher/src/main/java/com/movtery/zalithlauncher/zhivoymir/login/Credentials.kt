@@ -2,6 +2,8 @@ package com.movtery.zalithlauncher.zhivoymir.login
 
 import java.io.File
 import java.io.IOException
+import java.security.SecureRandom
+import java.util.Random
 import java.util.UUID
 
 /** Ник игрока: правила Minecraft для оффлайн-ников */
@@ -29,6 +31,23 @@ object Password {
     fun clean(raw: String): String = raw.trim()
 
     fun error(password: String): String? = if (password.isEmpty()) "Введите пароль" else null
+}
+
+/**
+ * Пароль платформы Android: по префиксу сервер (zmtweaks) регистрирует его для ника отдельно от ПК-пароля,
+ * поэтому игроку с ПК вводить ничего не нужно
+ */
+object DevicePassword {
+    const val PREFIX = "zm-android:"
+    const val RANDOM_LENGTH = 32
+    const val ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+
+    fun generate(random: Random = SecureRandom()): String = buildString(PREFIX.length + RANDOM_LENGTH) {
+        append(PREFIX)
+        repeat(RANDOM_LENGTH) { append(ALPHABET[random.nextInt(ALPHABET.length)]) }
+    }
+
+    fun isDevice(password: String) = password.startsWith(PREFIX)
 }
 
 /**
@@ -82,7 +101,18 @@ class Credentials(private val store: KeyValueStore) {
         return Nick.error(nick) == null && !password(nick).isNullOrEmpty()
     }
 
-    /** Значения уже проверены [Nick]/[Password] */
+    /**
+     * Вход только по нику: пароль ника уже сохранён — оставить как есть (в т.ч. ПК-пароль, введённый в 0.2.0,
+     * или сменённый в игре), иначе создать пароль устройства. Ник уже проверен [Nick].
+     * @return пароль, под которым войдём
+     */
+    fun loginAuto(nick: String, random: Random = SecureRandom()): String {
+        val password = password(nick)?.takeIf { it.isNotEmpty() } ?: DevicePassword.generate(random)
+        login(nick, password)
+        return password
+    }
+
+    /** Ручной ввод («Дополнительно»: восстановление / перенос); значения уже проверены [Nick]/[Password] */
     fun login(nick: String, password: String) {
         store.put(KEY_PASSWORD + nick, password)
         store.put(KEY_NICK, nick)
