@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -106,11 +107,13 @@ object AppUpdater {
             is UpdateState.Failed -> s.info
             else -> return
         }
-        if (downloadJob?.isActive == true) return
         val appContext = context.applicationContext
         _state.value = UpdateState.Downloading(info, 0f)
+        val previous = downloadJob
         downloadJob = scope.launch {
             try {
+                // отменённая закачка могла ещё не выйти из read() — не пишем в .part вдвоём
+                previous?.cancelAndJoin()
                 val apk = download(appContext, info)
                 withContext(Dispatchers.Main) { install(appContext, info, apk) }
             } catch (e: CancellationException) {
